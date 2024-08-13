@@ -1,0 +1,1107 @@
+{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "id": "ae54c1f5-8f4f-4fc3-a970-9d3e65d23355",
+   "metadata": {},
+   "source": [
+    "# Lesson 4: Preparing your model for training"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 1,
+   "id": "eb5c998c-7135-4a0f-b3fa-9d2147f64eb6",
+   "metadata": {
+    "height": 251
+   },
+   "outputs": [],
+   "source": [
+    "# Ignore insignificant warnings (ex: deprecation warnings)\n",
+    "import warnings\n",
+    "warnings.filterwarnings('ignore')\n",
+    "\n",
+    "# Set a seed value for reproducibility\n",
+    "import torch\n",
+    "\n",
+    "def fix_torch_seed(seed=42):\n",
+    "    torch.manual_seed(seed)\n",
+    "    torch.cuda.manual_seed(seed)\n",
+    "    torch.backends.cudnn.deterministic = True\n",
+    "    torch.backends.cudnn.benchmark = False\n",
+    "\n",
+    "fix_torch_seed()"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "582f9486-36ce-4361-9f0b-5bd2f190c332",
+   "metadata": {},
+   "source": [
+    "## 1. Model configuration\n",
+    "\n",
+    "You'll configure models based on Meta's Llama family of models. The transformers library has several tools for working with these models, which you can read about [here](https://huggingface.co/docs/transformers/main/en/model_doc/llama).\n",
+    "\n",
+    "Start by creating a `LlamaConfig` object to configure the architecture of the model:"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 2,
+   "id": "1e85be0c-d2fa-4070-9450-fce9ec7b5312",
+   "metadata": {
+    "height": 64
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "LlamaConfig {\n",
+      "  \"attention_bias\": false,\n",
+      "  \"attention_dropout\": 0.0,\n",
+      "  \"bos_token_id\": 1,\n",
+      "  \"eos_token_id\": 2,\n",
+      "  \"hidden_act\": \"silu\",\n",
+      "  \"hidden_size\": 4096,\n",
+      "  \"initializer_range\": 0.02,\n",
+      "  \"intermediate_size\": 11008,\n",
+      "  \"max_position_embeddings\": 2048,\n",
+      "  \"model_type\": \"llama\",\n",
+      "  \"num_attention_heads\": 32,\n",
+      "  \"num_hidden_layers\": 32,\n",
+      "  \"num_key_value_heads\": 32,\n",
+      "  \"pretraining_tp\": 1,\n",
+      "  \"rms_norm_eps\": 1e-06,\n",
+      "  \"rope_scaling\": null,\n",
+      "  \"rope_theta\": 10000.0,\n",
+      "  \"tie_word_embeddings\": false,\n",
+      "  \"transformers_version\": \"4.37.2\",\n",
+      "  \"use_cache\": true,\n",
+      "  \"vocab_size\": 32000\n",
+      "}\n",
+      "\n"
+     ]
+    }
+   ],
+   "source": [
+    "from transformers import LlamaConfig\n",
+    "config = LlamaConfig()\n",
+    "print(config)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "1f440840",
+   "metadata": {},
+   "source": [
+    "Next, update parameters to change the model architecture:"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 3,
+   "id": "38993554-f050-479d-9f65-846f935af606",
+   "metadata": {
+    "height": 132
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "LlamaConfig {\n",
+      "  \"attention_bias\": false,\n",
+      "  \"attention_dropout\": 0.0,\n",
+      "  \"bos_token_id\": 1,\n",
+      "  \"eos_token_id\": 2,\n",
+      "  \"hidden_act\": \"silu\",\n",
+      "  \"hidden_size\": 1024,\n",
+      "  \"initializer_range\": 0.02,\n",
+      "  \"intermediate_size\": 4096,\n",
+      "  \"max_position_embeddings\": 2048,\n",
+      "  \"model_type\": \"llama\",\n",
+      "  \"num_attention_heads\": 32,\n",
+      "  \"num_hidden_layers\": 12,\n",
+      "  \"num_key_value_heads\": 8,\n",
+      "  \"pretraining_tp\": 1,\n",
+      "  \"rms_norm_eps\": 1e-06,\n",
+      "  \"rope_scaling\": null,\n",
+      "  \"rope_theta\": 10000.0,\n",
+      "  \"tie_word_embeddings\": false,\n",
+      "  \"torch_dtype\": \"bfloat16\",\n",
+      "  \"transformers_version\": \"4.37.2\",\n",
+      "  \"use_cache\": false,\n",
+      "  \"vocab_size\": 32000\n",
+      "}\n",
+      "\n"
+     ]
+    }
+   ],
+   "source": [
+    "config.num_hidden_layers = 12      # reduced from 32 to 12\n",
+    "config.hidden_size = 1024          # reduced 1/4 from 4096 to 1024\n",
+    "config.intermediate_size = 4096    # reduced 1/3 from 11008 to 4096 (dimension of MLP representations)\n",
+    "config.num_key_value_heads = 8     # reduced 1/4 from 32 to 8 (defaults to num_attention_heads=32)\n",
+    "config.torch_dtype = \"bfloat16\"    # for half-precision training\n",
+    "config.use_cache = False           # `True` is incompatible w/ gradient checkpointing\n",
+    "print(config)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "4bb71119-897d-4b0a-91fb-4d49decd5f50",
+   "metadata": {},
+   "source": [
+    "## 2. Weight initialization\n",
+    "\n",
+    "In the next sections, you'll explore four different ways to initialize the weights of a model for training:\n",
+    "1. Random weight initialization\n",
+    "2. Using an existing model for continued pre-training\n",
+    "3. Downscaling an existing model\n",
+    "4. Upscaling an existing model"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "b1d47054-897d-4ab9-a382-6ea1aa824b88",
+   "metadata": {},
+   "source": [
+    "### Random weight initialization\n",
+    "\n",
+    "Randomly initializing model weights sets all weights to values from a truncated normal distribution with mean 0 and standard deviation of 0.02. Values beyond 2-sigma from the mean are set to 0."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 4,
+   "id": "a860f758-3eb5-44bb-b920-f99d9c15e3bc",
+   "metadata": {
+    "height": 64
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "LlamaForCausalLM(\n",
+      "  (model): LlamaModel(\n",
+      "    (embed_tokens): Embedding(32000, 1024)\n",
+      "    (layers): ModuleList(\n",
+      "      (0-11): 12 x LlamaDecoderLayer(\n",
+      "        (self_attn): LlamaSdpaAttention(\n",
+      "          (q_proj): Linear(in_features=1024, out_features=1024, bias=False)\n",
+      "          (k_proj): Linear(in_features=1024, out_features=256, bias=False)\n",
+      "          (v_proj): Linear(in_features=1024, out_features=256, bias=False)\n",
+      "          (o_proj): Linear(in_features=1024, out_features=1024, bias=False)\n",
+      "          (rotary_emb): LlamaRotaryEmbedding()\n",
+      "        )\n",
+      "        (mlp): LlamaMLP(\n",
+      "          (gate_proj): Linear(in_features=1024, out_features=4096, bias=False)\n",
+      "          (up_proj): Linear(in_features=1024, out_features=4096, bias=False)\n",
+      "          (down_proj): Linear(in_features=4096, out_features=1024, bias=False)\n",
+      "          (act_fn): SiLU()\n",
+      "        )\n",
+      "        (input_layernorm): LlamaRMSNorm()\n",
+      "        (post_attention_layernorm): LlamaRMSNorm()\n",
+      "      )\n",
+      "    )\n",
+      "    (norm): LlamaRMSNorm()\n",
+      "  )\n",
+      "  (lm_head): Linear(in_features=1024, out_features=32000, bias=False)\n",
+      ")\n"
+     ]
+    }
+   ],
+   "source": [
+    "from transformers import LlamaForCausalLM\n",
+    "model = LlamaForCausalLM(config)\n",
+    "print(model)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 5,
+   "id": "b754ad49-4ab4-4768-8140-c00cc73a6933",
+   "metadata": {
+    "height": 115
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "The total number of parameters is: 248013824\n"
+     ]
+    }
+   ],
+   "source": [
+    "def print_nparams(model):\n",
+    "    \"\"\"Calculate the total number of model parameters\"\"\"\n",
+    "    nparams = sum(p.numel() for p in model.parameters())\n",
+    "    print(f\"The total number of parameters is: {nparams}\")\n",
+    "\n",
+    "print_nparams(model)  # 248013824 => 248M"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "58183c9f",
+   "metadata": {},
+   "source": [
+    "Take a look at a sample of the weights in a single layer:"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 6,
+   "id": "b2350b11-b989-4b7b-8f60-0b53d6748b26",
+   "metadata": {
+    "height": 132
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "First 30 weights of layer 'model.layers.0.self_attn.q_proj.weight':\n",
+      "tensor([ 1.5794e-02, -2.2748e-02,  2.0156e-02, -2.6072e-02, -8.3267e-05,\n",
+      "         8.7432e-03, -9.0255e-04, -4.2442e-02,  1.5337e-02,  1.4482e-02,\n",
+      "         1.3526e-02,  1.9171e-03, -2.3141e-02, -4.2336e-03,  6.9818e-04,\n",
+      "         8.9955e-03, -2.0524e-02, -1.3378e-02,  2.3255e-02,  9.5167e-04,\n",
+      "         2.1053e-02,  1.2794e-02, -7.6783e-03, -3.7832e-03, -8.9180e-03,\n",
+      "         7.4018e-04, -2.5204e-02, -1.7069e-02,  1.3481e-03,  4.7622e-02])\n"
+     ]
+    }
+   ],
+   "source": [
+    "layer_name = \"model.layers.0.self_attn.q_proj.weight\"\n",
+    "\n",
+    "for name, param in model.named_parameters():\n",
+    "    if name == layer_name:\n",
+    "        print(f\"First 30 weights of layer '{layer_name}':\")\n",
+    "        print(param.data.view(-1)[:30])\n",
+    "        break"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "833896a8",
+   "metadata": {},
+   "source": [
+    "Try using the model for inference:"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 7,
+   "id": "bb7f1e5b-ad7a-429d-9268-3dc1abadc881",
+   "metadata": {
+    "height": 455
+   },
+   "outputs": [
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "Setting `pad_token_id` to `eos_token_id`:2 for open-end generation.\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "possessed possessed possessed possessed possessed possessedcontinuecontinuecontinuecontinuecontinueDownloadџcontinueDownloadcontinueDownloadcontinueertsxE Point remoterts remoterts remoterts갑continuecontinuecontinue wide wide atr wide atr wide wide wide wide wide wide wide wide wide wide wide wideursor otra FC otraopesopesopesopesopesopesopesopesopesopesopes wideopes wideopes wideopes wideopes wideopes wideopes wideopesimpse Library wideopesasterasterasterasterasterasterasterasterasterasterasterasterasterasterasterasterasterasterasteraster primarily primarily primarily primarily primarily primarily primarilyasterasterasterasterasterasterasterasterasterasterasteraster primarilyitä primarilyitä primarilyitä primarilyitä\n"
+     ]
+    }
+   ],
+   "source": [
+    "# Load a tokenizer from Upstage Solar, \n",
+    "# which is compatible with the Llama-2 tokenizer\n",
+    "from transformers import LlamaTokenizer\n",
+    "model_dir = \"./models/upstage/SOLAR-10.7B-v1.0\"\n",
+    "tokenizer = LlamaTokenizer.from_pretrained(model_dir)\n",
+    "\n",
+    "# Run simple inference with prompt\n",
+    "from transformers import TextStreamer\n",
+    "\n",
+    "prompt = \"I am an engineer. I love\"\n",
+    "\n",
+    "inputs = tokenizer(prompt, return_tensors=\"pt\").to(model.device)\n",
+    "\n",
+    "streamer = TextStreamer(\n",
+    "    tokenizer, \n",
+    "    skip_prompt=True, \n",
+    "    skip_special_tokens=True\n",
+    ")\n",
+    "\n",
+    "outputs = model.generate(\n",
+    "    **inputs, \n",
+    "    streamer=streamer, \n",
+    "    use_cache=True, \n",
+    "    max_new_tokens=128, \n",
+    "    do_sample=False\n",
+    ")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "5b769aaf",
+   "metadata": {},
+   "source": [
+    "Remove the model from memory to avoid crashing the kernel:"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 8,
+   "id": "6dfc8e08-f68c-422f-96dd-d0515ab00f29",
+   "metadata": {
+    "height": 115
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "0"
+      ]
+     },
+     "execution_count": 8,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "# NOTE: We're running large models in a limited environment. Run me if you encounter any memory issues.\n",
+    "import gc\n",
+    "del model\n",
+    "del streamer\n",
+    "del outputs\n",
+    "gc.collect()"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "e6d55a00-3402-48a7-8bce-81d8a546e213",
+   "metadata": {},
+   "source": [
+    "### Reuse general pretrained model weights\n",
+    "\n",
+    "If you load an existing model, you can use it as is to continue pretraining on new data."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 9,
+   "id": "2b8a27a2-e56c-406f-bf2a-086f6c01a703",
+   "metadata": {
+    "height": 149
+   },
+   "outputs": [],
+   "source": [
+    "from transformers import AutoModelForCausalLM\n",
+    "\n",
+    "model_name_or_path = \"./models/upstage/TinySolar-248m-4k\"\n",
+    "model = AutoModelForCausalLM.from_pretrained(\n",
+    "    model_name_or_path,\n",
+    "    device_map=\"cpu\",\n",
+    "    torch_dtype=torch.bfloat16,\n",
+    ")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "0d36ced3",
+   "metadata": {},
+   "source": [
+    "Remove the model from memory to avoid crashing the kernel:"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 10,
+   "id": "dffa497e-c35f-459b-9000-0b8d4c601491",
+   "metadata": {
+    "height": 64
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "66"
+      ]
+     },
+     "execution_count": 10,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "# NOTE: We're running large models in a limited environment. Run me if you encounter any memory issues.\n",
+    "del model\n",
+    "gc.collect()"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "e91cf37c-f8c6-45df-a7e2-95a8db9f1b93",
+   "metadata": {},
+   "source": [
+    "### Downscaling from a general pretrained model\n",
+    "\n",
+    "Here you'll downscale the tinySolar-248m-4k model from a 12 layer model to a 10 layer model."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 20,
+   "id": "404ac9d5-a5bd-42b4-bdad-c1954f98da87",
+   "metadata": {
+    "height": 166
+   },
+   "outputs": [],
+   "source": [
+    "from transformers import AutoTokenizer, AutoConfig\n",
+    "\n",
+    "model_name_or_path = \"./models/upstage/TinySolar-248m-4k\"\n",
+    "model = AutoModelForCausalLM.from_pretrained(\n",
+    "    model_name_or_path,\n",
+    "    device_map=\"cpu\",\n",
+    "    torch_dtype=torch.bfloat16,\n",
+    ")\n",
+    "tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 21,
+   "id": "e32988c2-07ad-4858-ad4d-336a1dda3be5",
+   "metadata": {
+    "height": 30
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "LlamaForCausalLM(\n",
+      "  (model): LlamaModel(\n",
+      "    (embed_tokens): Embedding(32000, 1024)\n",
+      "    (layers): ModuleList(\n",
+      "      (0-11): 12 x LlamaDecoderLayer(\n",
+      "        (self_attn): LlamaSdpaAttention(\n",
+      "          (q_proj): Linear(in_features=1024, out_features=1024, bias=False)\n",
+      "          (k_proj): Linear(in_features=1024, out_features=256, bias=False)\n",
+      "          (v_proj): Linear(in_features=1024, out_features=256, bias=False)\n",
+      "          (o_proj): Linear(in_features=1024, out_features=1024, bias=False)\n",
+      "          (rotary_emb): LlamaRotaryEmbedding()\n",
+      "        )\n",
+      "        (mlp): LlamaMLP(\n",
+      "          (gate_proj): Linear(in_features=1024, out_features=4096, bias=False)\n",
+      "          (up_proj): Linear(in_features=1024, out_features=4096, bias=False)\n",
+      "          (down_proj): Linear(in_features=4096, out_features=1024, bias=False)\n",
+      "          (act_fn): SiLU()\n",
+      "        )\n",
+      "        (input_layernorm): LlamaRMSNorm()\n",
+      "        (post_attention_layernorm): LlamaRMSNorm()\n",
+      "      )\n",
+      "    )\n",
+      "    (norm): LlamaRMSNorm()\n",
+      "  )\n",
+      "  (lm_head): Linear(in_features=1024, out_features=32000, bias=False)\n",
+      ")\n"
+     ]
+    }
+   ],
+   "source": [
+    "print(model)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 13,
+   "id": "813e119a-43cb-42c4-9a65-39adba7eb020",
+   "metadata": {
+    "height": 30
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "The total number of parameters is: 248013824\n"
+     ]
+    }
+   ],
+   "source": [
+    "print_nparams(model)  # 248013824 => 248M"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "0784dfa5",
+   "metadata": {},
+   "source": [
+    "Remove the middle two layers (layers 5 and 6) and update the configuration:"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 14,
+   "id": "130e3016-dd42-4a5d-aa2e-ba203c9bb745",
+   "metadata": {
+    "height": 183
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "The total number of parameters is: 217601024\n"
+     ]
+    }
+   ],
+   "source": [
+    "layers = model.model.layers\n",
+    "model.model.layers = layers[:5] + layers[-5:]\n",
+    "\n",
+    "config = AutoConfig.from_pretrained(\n",
+    "    model_name_or_path,    \n",
+    "    num_hidden_layers=len(model.model.layers),\n",
+    ")\n",
+    "model.config = config\n",
+    "\n",
+    "print_nparams(model)  # 217601024 => 217M"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "bc3ea7cd",
+   "metadata": {},
+   "source": [
+    "Clear the memory to avoid crashing the kernel:"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 15,
+   "id": "35fa3dae-e6dd-4892-8965-b0a03d987456",
+   "metadata": {
+    "height": 81
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "119"
+      ]
+     },
+     "execution_count": 15,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "# NOTE: We're running large models in a limited environment. Run me if you encounter any memory issues.\n",
+    "import gc\n",
+    "del model\n",
+    "gc.collect()"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "54991d43-488d-4474-be1a-db0531961672",
+   "metadata": {},
+   "source": [
+    "### Depth Upscaling from a general pretrained model\n",
+    "\n",
+    "Here you are going to upscale the tinySolar-248m-4k model from 12 layers to 16 layers. Here are the steps you'll take:\n",
+    "1. Configure a 16 layer model and initialize it with random weights\n",
+    "2. Load the 12 layer tinySolar-248m-4k model into memory\n",
+    "3. Copy the bottom 8 and top 8 layers from the 12 layer model and use them to overwrite the random weights of the 16 layer model\n",
+    "4. Copy over the embedding and classifying layers to replace the randomly initialized counterparts in the 16 layer model"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 16,
+   "id": "0472958a-7243-46f6-bd6c-6787286a819a",
+   "metadata": {
+    "height": 183
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "LlamaConfig {\n",
+      "  \"attention_bias\": false,\n",
+      "  \"attention_dropout\": 0.0,\n",
+      "  \"bos_token_id\": 1,\n",
+      "  \"eos_token_id\": 2,\n",
+      "  \"hidden_act\": \"silu\",\n",
+      "  \"hidden_size\": 1024,\n",
+      "  \"initializer_range\": 0.02,\n",
+      "  \"intermediate_size\": 4096,\n",
+      "  \"max_position_embeddings\": 2048,\n",
+      "  \"model_type\": \"llama\",\n",
+      "  \"num_attention_heads\": 32,\n",
+      "  \"num_hidden_layers\": 16,\n",
+      "  \"num_key_value_heads\": 8,\n",
+      "  \"pretraining_tp\": 1,\n",
+      "  \"rms_norm_eps\": 1e-06,\n",
+      "  \"rope_scaling\": null,\n",
+      "  \"rope_theta\": 10000.0,\n",
+      "  \"tie_word_embeddings\": false,\n",
+      "  \"torch_dtype\": \"bfloat16\",\n",
+      "  \"transformers_version\": \"4.37.2\",\n",
+      "  \"use_cache\": false,\n",
+      "  \"vocab_size\": 32000\n",
+      "}\n",
+      "\n"
+     ]
+    }
+   ],
+   "source": [
+    "config = LlamaConfig(\n",
+    "    num_hidden_layers=16,  # We want our model to have 16 final layers\n",
+    "    hidden_size=1024,\n",
+    "    intermediate_size=4096,\n",
+    "    num_attention_heads=32,\n",
+    "    num_key_value_heads=8,\n",
+    "    torch_dtype=\"bfloat16\",\n",
+    "    use_cache=False \n",
+    ")\n",
+    "print(config)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 17,
+   "id": "e8586992-1d23-45f7-86d9-480b34bc7894",
+   "metadata": {
+    "height": 64
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "The total number of parameters is: 308839424\n"
+     ]
+    }
+   ],
+   "source": [
+    "model = LlamaForCausalLM(config)\n",
+    "model = model.to(dtype=torch.bfloat16)  # convert to bfloat16\n",
+    "print_nparams(model)  # 308839424 => 308M"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 19,
+   "id": "685b3dbe-3aa4-4858-b9d3-d59645108056",
+   "metadata": {
+    "height": 166
+   },
+   "outputs": [
+    {
+     "ename": "ReadTimeout",
+     "evalue": "HTTPSConnectionPool(host='huggingface.co', port=443): Read timed out. (read timeout=10)",
+     "output_type": "error",
+     "traceback": [
+      "\u001b[0;31m---------------------------------------------------------------------------\u001b[0m",
+      "\u001b[0;31mTimeoutError\u001b[0m                              Traceback (most recent call last)",
+      "File \u001b[0;32m/usr/local/lib/python3.11/site-packages/urllib3/connectionpool.py:537\u001b[0m, in \u001b[0;36mHTTPConnectionPool._make_request\u001b[0;34m(self, conn, method, url, body, headers, retries, timeout, chunked, response_conn, preload_content, decode_content, enforce_content_length)\u001b[0m\n\u001b[1;32m    536\u001b[0m \u001b[38;5;28;01mtry\u001b[39;00m:\n\u001b[0;32m--> 537\u001b[0m     response \u001b[38;5;241m=\u001b[39m \u001b[43mconn\u001b[49m\u001b[38;5;241;43m.\u001b[39;49m\u001b[43mgetresponse\u001b[49m\u001b[43m(\u001b[49m\u001b[43m)\u001b[49m\n\u001b[1;32m    538\u001b[0m \u001b[38;5;28;01mexcept\u001b[39;00m (BaseSSLError, \u001b[38;5;167;01mOSError\u001b[39;00m) \u001b[38;5;28;01mas\u001b[39;00m e:\n",
+      "File \u001b[0;32m/usr/local/lib/python3.11/site-packages/urllib3/connection.py:466\u001b[0m, in \u001b[0;36mHTTPConnection.getresponse\u001b[0;34m(self)\u001b[0m\n\u001b[1;32m    465\u001b[0m \u001b[38;5;66;03m# Get the response from http.client.HTTPConnection\u001b[39;00m\n\u001b[0;32m--> 466\u001b[0m httplib_response \u001b[38;5;241m=\u001b[39m \u001b[38;5;28;43msuper\u001b[39;49m\u001b[43m(\u001b[49m\u001b[43m)\u001b[49m\u001b[38;5;241;43m.\u001b[39;49m\u001b[43mgetresponse\u001b[49m\u001b[43m(\u001b[49m\u001b[43m)\u001b[49m\n\u001b[1;32m    468\u001b[0m \u001b[38;5;28;01mtry\u001b[39;00m:\n",
+      "File \u001b[0;32m/usr/local/lib/python3.11/http/client.py:1395\u001b[0m, in \u001b[0;36mHTTPConnection.getresponse\u001b[0;34m(self)\u001b[0m\n\u001b[1;32m   1394\u001b[0m \u001b[38;5;28;01mtry\u001b[39;00m:\n\u001b[0;32m-> 1395\u001b[0m     \u001b[43mresponse\u001b[49m\u001b[38;5;241;43m.\u001b[39;49m\u001b[43mbegin\u001b[49m\u001b[43m(\u001b[49m\u001b[43m)\u001b[49m\n\u001b[1;32m   1396\u001b[0m \u001b[38;5;28;01mexcept\u001b[39;00m \u001b[38;5;167;01mConnectionError\u001b[39;00m:\n",
+      "File \u001b[0;32m/usr/local/lib/python3.11/http/client.py:325\u001b[0m, in \u001b[0;36mHTTPResponse.begin\u001b[0;34m(self)\u001b[0m\n\u001b[1;32m    324\u001b[0m \u001b[38;5;28;01mwhile\u001b[39;00m \u001b[38;5;28;01mTrue\u001b[39;00m:\n\u001b[0;32m--> 325\u001b[0m     version, status, reason \u001b[38;5;241m=\u001b[39m \u001b[38;5;28;43mself\u001b[39;49m\u001b[38;5;241;43m.\u001b[39;49m\u001b[43m_read_status\u001b[49m\u001b[43m(\u001b[49m\u001b[43m)\u001b[49m\n\u001b[1;32m    326\u001b[0m     \u001b[38;5;28;01mif\u001b[39;00m status \u001b[38;5;241m!=\u001b[39m CONTINUE:\n",
+      "File \u001b[0;32m/usr/local/lib/python3.11/http/client.py:286\u001b[0m, in \u001b[0;36mHTTPResponse._read_status\u001b[0;34m(self)\u001b[0m\n\u001b[1;32m    285\u001b[0m \u001b[38;5;28;01mdef\u001b[39;00m \u001b[38;5;21m_read_status\u001b[39m(\u001b[38;5;28mself\u001b[39m):\n\u001b[0;32m--> 286\u001b[0m     line \u001b[38;5;241m=\u001b[39m \u001b[38;5;28mstr\u001b[39m(\u001b[38;5;28mself\u001b[39m\u001b[38;5;241m.\u001b[39mfp\u001b[38;5;241m.\u001b[39mreadline(_MAXLINE \u001b[38;5;241m+\u001b[39m \u001b[38;5;241m1\u001b[39m), \u001b[38;5;124m\"\u001b[39m\u001b[38;5;124miso-8859-1\u001b[39m\u001b[38;5;124m\"\u001b[39m)\n\u001b[1;32m    287\u001b[0m     \u001b[38;5;28;01mif\u001b[39;00m \u001b[38;5;28mlen\u001b[39m(line) \u001b[38;5;241m>\u001b[39m _MAXLINE:\n",
+      "File \u001b[0;32m/usr/local/lib/python3.11/socket.py:706\u001b[0m, in \u001b[0;36mSocketIO.readinto\u001b[0;34m(self, b)\u001b[0m\n\u001b[1;32m    705\u001b[0m \u001b[38;5;28;01mtry\u001b[39;00m:\n\u001b[0;32m--> 706\u001b[0m     \u001b[38;5;28;01mreturn\u001b[39;00m \u001b[38;5;28;43mself\u001b[39;49m\u001b[38;5;241;43m.\u001b[39;49m\u001b[43m_sock\u001b[49m\u001b[38;5;241;43m.\u001b[39;49m\u001b[43mrecv_into\u001b[49m\u001b[43m(\u001b[49m\u001b[43mb\u001b[49m\u001b[43m)\u001b[49m\n\u001b[1;32m    707\u001b[0m \u001b[38;5;28;01mexcept\u001b[39;00m timeout:\n",
+      "File \u001b[0;32m/usr/local/lib/python3.11/ssl.py:1314\u001b[0m, in \u001b[0;36mSSLSocket.recv_into\u001b[0;34m(self, buffer, nbytes, flags)\u001b[0m\n\u001b[1;32m   1311\u001b[0m         \u001b[38;5;28;01mraise\u001b[39;00m \u001b[38;5;167;01mValueError\u001b[39;00m(\n\u001b[1;32m   1312\u001b[0m           \u001b[38;5;124m\"\u001b[39m\u001b[38;5;124mnon-zero flags not allowed in calls to recv_into() on \u001b[39m\u001b[38;5;132;01m%s\u001b[39;00m\u001b[38;5;124m\"\u001b[39m \u001b[38;5;241m%\u001b[39m\n\u001b[1;32m   1313\u001b[0m           \u001b[38;5;28mself\u001b[39m\u001b[38;5;241m.\u001b[39m\u001b[38;5;18m__class__\u001b[39m)\n\u001b[0;32m-> 1314\u001b[0m     \u001b[38;5;28;01mreturn\u001b[39;00m \u001b[38;5;28;43mself\u001b[39;49m\u001b[38;5;241;43m.\u001b[39;49m\u001b[43mread\u001b[49m\u001b[43m(\u001b[49m\u001b[43mnbytes\u001b[49m\u001b[43m,\u001b[49m\u001b[43m \u001b[49m\u001b[43mbuffer\u001b[49m\u001b[43m)\u001b[49m\n\u001b[1;32m   1315\u001b[0m \u001b[38;5;28;01melse\u001b[39;00m:\n",
+      "File \u001b[0;32m/usr/local/lib/python3.11/ssl.py:1166\u001b[0m, in \u001b[0;36mSSLSocket.read\u001b[0;34m(self, len, buffer)\u001b[0m\n\u001b[1;32m   1165\u001b[0m \u001b[38;5;28;01mif\u001b[39;00m buffer \u001b[38;5;129;01mis\u001b[39;00m \u001b[38;5;129;01mnot\u001b[39;00m \u001b[38;5;28;01mNone\u001b[39;00m:\n\u001b[0;32m-> 1166\u001b[0m     \u001b[38;5;28;01mreturn\u001b[39;00m \u001b[38;5;28;43mself\u001b[39;49m\u001b[38;5;241;43m.\u001b[39;49m\u001b[43m_sslobj\u001b[49m\u001b[38;5;241;43m.\u001b[39;49m\u001b[43mread\u001b[49m\u001b[43m(\u001b[49m\u001b[38;5;28;43mlen\u001b[39;49m\u001b[43m,\u001b[49m\u001b[43m \u001b[49m\u001b[43mbuffer\u001b[49m\u001b[43m)\u001b[49m\n\u001b[1;32m   1167\u001b[0m \u001b[38;5;28;01melse\u001b[39;00m:\n",
+      "\u001b[0;31mTimeoutError\u001b[0m: The read operation timed out",
+      "\nThe above exception was the direct cause of the following exception:\n",
+      "\u001b[0;31mReadTimeoutError\u001b[0m                          Traceback (most recent call last)",
+      "File \u001b[0;32m/usr/local/lib/python3.11/site-packages/requests/adapters.py:589\u001b[0m, in \u001b[0;36mHTTPAdapter.send\u001b[0;34m(self, request, stream, timeout, verify, cert, proxies)\u001b[0m\n\u001b[1;32m    588\u001b[0m \u001b[38;5;28;01mtry\u001b[39;00m:\n\u001b[0;32m--> 589\u001b[0m     resp \u001b[38;5;241m=\u001b[39m \u001b[43mconn\u001b[49m\u001b[38;5;241;43m.\u001b[39;49m\u001b[43murlopen\u001b[49m\u001b[43m(\u001b[49m\n\u001b[1;32m    590\u001b[0m \u001b[43m        \u001b[49m\u001b[43mmethod\u001b[49m\u001b[38;5;241;43m=\u001b[39;49m\u001b[43mrequest\u001b[49m\u001b[38;5;241;43m.\u001b[39;49m\u001b[43mmethod\u001b[49m\u001b[43m,\u001b[49m\n\u001b[1;32m    591\u001b[0m \u001b[43m        \u001b[49m\u001b[43murl\u001b[49m\u001b[38;5;241;43m=\u001b[39;49m\u001b[43murl\u001b[49m\u001b[43m,\u001b[49m\n\u001b[1;32m    592\u001b[0m \u001b[43m        \u001b[49m\u001b[43mbody\u001b[49m\u001b[38;5;241;43m=\u001b[39;49m\u001b[43mrequest\u001b[49m\u001b[38;5;241;43m.\u001b[39;49m\u001b[43mbody\u001b[49m\u001b[43m,\u001b[49m\n\u001b[1;32m    593\u001b[0m \u001b[43m        \u001b[49m\u001b[43mheaders\u001b[49m\u001b[38;5;241;43m=\u001b[39;49m\u001b[43mrequest\u001b[49m\u001b[38;5;241;43m.\u001b[39;49m\u001b[43mheaders\u001b[49m\u001b[43m,\u001b[49m\n\u001b[1;32m    594\u001b[0m \u001b[43m        \u001b[49m\u001b[43mredirect\u001b[49m\u001b[38;5;241;43m=\u001b[39;49m\u001b[38;5;28;43;01mFalse\u001b[39;49;00m\u001b[43m,\u001b[49m\n\u001b[1;32m    595\u001b[0m \u001b[43m        \u001b[49m\u001b[43massert_same_host\u001b[49m\u001b[38;5;241;43m=\u001b[39;49m\u001b[38;5;28;43;01mFalse\u001b[39;49;00m\u001b[43m,\u001b[49m\n\u001b[1;32m    596\u001b[0m \u001b[43m        \u001b[49m\u001b[43mpreload_content\u001b[49m\u001b[38;5;241;43m=\u001b[39;49m\u001b[38;5;28;43;01mFalse\u001b[39;49;00m\u001b[43m,\u001b[49m\n\u001b[1;32m    597\u001b[0m \u001b[43m        \u001b[49m\u001b[43mdecode_content\u001b[49m\u001b[38;5;241;43m=\u001b[39;49m\u001b[38;5;28;43;01mFalse\u001b[39;49;00m\u001b[43m,\u001b[49m\n\u001b[1;32m    598\u001b[0m \u001b[43m        \u001b[49m\u001b[43mretries\u001b[49m\u001b[38;5;241;43m=\u001b[39;49m\u001b[38;5;28;43mself\u001b[39;49m\u001b[38;5;241;43m.\u001b[39;49m\u001b[43mmax_retries\u001b[49m\u001b[43m,\u001b[49m\n\u001b[1;32m    599\u001b[0m \u001b[43m        \u001b[49m\u001b[43mtimeout\u001b[49m\u001b[38;5;241;43m=\u001b[39;49m\u001b[43mtimeout\u001b[49m\u001b[43m,\u001b[49m\n\u001b[1;32m    600\u001b[0m \u001b[43m        \u001b[49m\u001b[43mchunked\u001b[49m\u001b[38;5;241;43m=\u001b[39;49m\u001b[43mchunked\u001b[49m\u001b[43m,\u001b[49m\n\u001b[1;32m    601\u001b[0m \u001b[43m    \u001b[49m\u001b[43m)\u001b[49m\n\u001b[1;32m    603\u001b[0m \u001b[38;5;28;01mexcept\u001b[39;00m (ProtocolError, \u001b[38;5;167;01mOSError\u001b[39;00m) \u001b[38;5;28;01mas\u001b[39;00m err:\n",
+      "File \u001b[0;32m/usr/local/lib/python3.11/site-packages/urllib3/connectionpool.py:847\u001b[0m, in \u001b[0;36mHTTPConnectionPool.urlopen\u001b[0;34m(self, method, url, body, headers, retries, redirect, assert_same_host, timeout, pool_timeout, release_conn, chunked, body_pos, preload_content, decode_content, **response_kw)\u001b[0m\n\u001b[1;32m    845\u001b[0m     new_e \u001b[38;5;241m=\u001b[39m ProtocolError(\u001b[38;5;124m\"\u001b[39m\u001b[38;5;124mConnection aborted.\u001b[39m\u001b[38;5;124m\"\u001b[39m, new_e)\n\u001b[0;32m--> 847\u001b[0m retries \u001b[38;5;241m=\u001b[39m \u001b[43mretries\u001b[49m\u001b[38;5;241;43m.\u001b[39;49m\u001b[43mincrement\u001b[49m\u001b[43m(\u001b[49m\n\u001b[1;32m    848\u001b[0m \u001b[43m    \u001b[49m\u001b[43mmethod\u001b[49m\u001b[43m,\u001b[49m\u001b[43m \u001b[49m\u001b[43murl\u001b[49m\u001b[43m,\u001b[49m\u001b[43m \u001b[49m\u001b[43merror\u001b[49m\u001b[38;5;241;43m=\u001b[39;49m\u001b[43mnew_e\u001b[49m\u001b[43m,\u001b[49m\u001b[43m \u001b[49m\u001b[43m_pool\u001b[49m\u001b[38;5;241;43m=\u001b[39;49m\u001b[38;5;28;43mself\u001b[39;49m\u001b[43m,\u001b[49m\u001b[43m \u001b[49m\u001b[43m_stacktrace\u001b[49m\u001b[38;5;241;43m=\u001b[39;49m\u001b[43msys\u001b[49m\u001b[38;5;241;43m.\u001b[39;49m\u001b[43mexc_info\u001b[49m\u001b[43m(\u001b[49m\u001b[43m)\u001b[49m\u001b[43m[\u001b[49m\u001b[38;5;241;43m2\u001b[39;49m\u001b[43m]\u001b[49m\n\u001b[1;32m    849\u001b[0m \u001b[43m\u001b[49m\u001b[43m)\u001b[49m\n\u001b[1;32m    850\u001b[0m retries\u001b[38;5;241m.\u001b[39msleep()\n",
+      "File \u001b[0;32m/usr/local/lib/python3.11/site-packages/urllib3/util/retry.py:470\u001b[0m, in \u001b[0;36mRetry.increment\u001b[0;34m(self, method, url, response, error, _pool, _stacktrace)\u001b[0m\n\u001b[1;32m    469\u001b[0m \u001b[38;5;28;01mif\u001b[39;00m read \u001b[38;5;129;01mis\u001b[39;00m \u001b[38;5;28;01mFalse\u001b[39;00m \u001b[38;5;129;01mor\u001b[39;00m method \u001b[38;5;129;01mis\u001b[39;00m \u001b[38;5;28;01mNone\u001b[39;00m \u001b[38;5;129;01mor\u001b[39;00m \u001b[38;5;129;01mnot\u001b[39;00m \u001b[38;5;28mself\u001b[39m\u001b[38;5;241m.\u001b[39m_is_method_retryable(method):\n\u001b[0;32m--> 470\u001b[0m     \u001b[38;5;28;01mraise\u001b[39;00m \u001b[43mreraise\u001b[49m\u001b[43m(\u001b[49m\u001b[38;5;28;43mtype\u001b[39;49m\u001b[43m(\u001b[49m\u001b[43merror\u001b[49m\u001b[43m)\u001b[49m\u001b[43m,\u001b[49m\u001b[43m \u001b[49m\u001b[43merror\u001b[49m\u001b[43m,\u001b[49m\u001b[43m \u001b[49m\u001b[43m_stacktrace\u001b[49m\u001b[43m)\u001b[49m\n\u001b[1;32m    471\u001b[0m \u001b[38;5;28;01melif\u001b[39;00m read \u001b[38;5;129;01mis\u001b[39;00m \u001b[38;5;129;01mnot\u001b[39;00m \u001b[38;5;28;01mNone\u001b[39;00m:\n",
+      "File \u001b[0;32m/usr/local/lib/python3.11/site-packages/urllib3/util/util.py:39\u001b[0m, in \u001b[0;36mreraise\u001b[0;34m(tp, value, tb)\u001b[0m\n\u001b[1;32m     38\u001b[0m         \u001b[38;5;28;01mraise\u001b[39;00m value\u001b[38;5;241m.\u001b[39mwith_traceback(tb)\n\u001b[0;32m---> 39\u001b[0m     \u001b[38;5;28;01mraise\u001b[39;00m value\n\u001b[1;32m     40\u001b[0m \u001b[38;5;28;01mfinally\u001b[39;00m:\n",
+      "File \u001b[0;32m/usr/local/lib/python3.11/site-packages/urllib3/connectionpool.py:793\u001b[0m, in \u001b[0;36mHTTPConnectionPool.urlopen\u001b[0;34m(self, method, url, body, headers, retries, redirect, assert_same_host, timeout, pool_timeout, release_conn, chunked, body_pos, preload_content, decode_content, **response_kw)\u001b[0m\n\u001b[1;32m    792\u001b[0m \u001b[38;5;66;03m# Make the request on the HTTPConnection object\u001b[39;00m\n\u001b[0;32m--> 793\u001b[0m response \u001b[38;5;241m=\u001b[39m \u001b[38;5;28;43mself\u001b[39;49m\u001b[38;5;241;43m.\u001b[39;49m\u001b[43m_make_request\u001b[49m\u001b[43m(\u001b[49m\n\u001b[1;32m    794\u001b[0m \u001b[43m    \u001b[49m\u001b[43mconn\u001b[49m\u001b[43m,\u001b[49m\n\u001b[1;32m    795\u001b[0m \u001b[43m    \u001b[49m\u001b[43mmethod\u001b[49m\u001b[43m,\u001b[49m\n\u001b[1;32m    796\u001b[0m \u001b[43m    \u001b[49m\u001b[43murl\u001b[49m\u001b[43m,\u001b[49m\n\u001b[1;32m    797\u001b[0m \u001b[43m    \u001b[49m\u001b[43mtimeout\u001b[49m\u001b[38;5;241;43m=\u001b[39;49m\u001b[43mtimeout_obj\u001b[49m\u001b[43m,\u001b[49m\n\u001b[1;32m    798\u001b[0m \u001b[43m    \u001b[49m\u001b[43mbody\u001b[49m\u001b[38;5;241;43m=\u001b[39;49m\u001b[43mbody\u001b[49m\u001b[43m,\u001b[49m\n\u001b[1;32m    799\u001b[0m \u001b[43m    \u001b[49m\u001b[43mheaders\u001b[49m\u001b[38;5;241;43m=\u001b[39;49m\u001b[43mheaders\u001b[49m\u001b[43m,\u001b[49m\n\u001b[1;32m    800\u001b[0m \u001b[43m    \u001b[49m\u001b[43mchunked\u001b[49m\u001b[38;5;241;43m=\u001b[39;49m\u001b[43mchunked\u001b[49m\u001b[43m,\u001b[49m\n\u001b[1;32m    801\u001b[0m \u001b[43m    \u001b[49m\u001b[43mretries\u001b[49m\u001b[38;5;241;43m=\u001b[39;49m\u001b[43mretries\u001b[49m\u001b[43m,\u001b[49m\n\u001b[1;32m    802\u001b[0m \u001b[43m    \u001b[49m\u001b[43mresponse_conn\u001b[49m\u001b[38;5;241;43m=\u001b[39;49m\u001b[43mresponse_conn\u001b[49m\u001b[43m,\u001b[49m\n\u001b[1;32m    803\u001b[0m \u001b[43m    \u001b[49m\u001b[43mpreload_content\u001b[49m\u001b[38;5;241;43m=\u001b[39;49m\u001b[43mpreload_content\u001b[49m\u001b[43m,\u001b[49m\n\u001b[1;32m    804\u001b[0m \u001b[43m    \u001b[49m\u001b[43mdecode_content\u001b[49m\u001b[38;5;241;43m=\u001b[39;49m\u001b[43mdecode_content\u001b[49m\u001b[43m,\u001b[49m\n\u001b[1;32m    805\u001b[0m \u001b[43m    \u001b[49m\u001b[38;5;241;43m*\u001b[39;49m\u001b[38;5;241;43m*\u001b[39;49m\u001b[43mresponse_kw\u001b[49m\u001b[43m,\u001b[49m\n\u001b[1;32m    806\u001b[0m \u001b[43m\u001b[49m\u001b[43m)\u001b[49m\n\u001b[1;32m    808\u001b[0m \u001b[38;5;66;03m# Everything went great!\u001b[39;00m\n",
+      "File \u001b[0;32m/usr/local/lib/python3.11/site-packages/urllib3/connectionpool.py:539\u001b[0m, in \u001b[0;36mHTTPConnectionPool._make_request\u001b[0;34m(self, conn, method, url, body, headers, retries, timeout, chunked, response_conn, preload_content, decode_content, enforce_content_length)\u001b[0m\n\u001b[1;32m    538\u001b[0m \u001b[38;5;28;01mexcept\u001b[39;00m (BaseSSLError, \u001b[38;5;167;01mOSError\u001b[39;00m) \u001b[38;5;28;01mas\u001b[39;00m e:\n\u001b[0;32m--> 539\u001b[0m     \u001b[38;5;28;43mself\u001b[39;49m\u001b[38;5;241;43m.\u001b[39;49m\u001b[43m_raise_timeout\u001b[49m\u001b[43m(\u001b[49m\u001b[43merr\u001b[49m\u001b[38;5;241;43m=\u001b[39;49m\u001b[43me\u001b[49m\u001b[43m,\u001b[49m\u001b[43m \u001b[49m\u001b[43murl\u001b[49m\u001b[38;5;241;43m=\u001b[39;49m\u001b[43murl\u001b[49m\u001b[43m,\u001b[49m\u001b[43m \u001b[49m\u001b[43mtimeout_value\u001b[49m\u001b[38;5;241;43m=\u001b[39;49m\u001b[43mread_timeout\u001b[49m\u001b[43m)\u001b[49m\n\u001b[1;32m    540\u001b[0m     \u001b[38;5;28;01mraise\u001b[39;00m\n",
+      "File \u001b[0;32m/usr/local/lib/python3.11/site-packages/urllib3/connectionpool.py:370\u001b[0m, in \u001b[0;36mHTTPConnectionPool._raise_timeout\u001b[0;34m(self, err, url, timeout_value)\u001b[0m\n\u001b[1;32m    369\u001b[0m \u001b[38;5;28;01mif\u001b[39;00m \u001b[38;5;28misinstance\u001b[39m(err, SocketTimeout):\n\u001b[0;32m--> 370\u001b[0m     \u001b[38;5;28;01mraise\u001b[39;00m ReadTimeoutError(\n\u001b[1;32m    371\u001b[0m         \u001b[38;5;28mself\u001b[39m, url, \u001b[38;5;124mf\u001b[39m\u001b[38;5;124m\"\u001b[39m\u001b[38;5;124mRead timed out. (read timeout=\u001b[39m\u001b[38;5;132;01m{\u001b[39;00mtimeout_value\u001b[38;5;132;01m}\u001b[39;00m\u001b[38;5;124m)\u001b[39m\u001b[38;5;124m\"\u001b[39m\n\u001b[1;32m    372\u001b[0m     ) \u001b[38;5;28;01mfrom\u001b[39;00m \u001b[38;5;21;01merr\u001b[39;00m\n\u001b[1;32m    374\u001b[0m \u001b[38;5;66;03m# See the above comment about EAGAIN in Python 3.\u001b[39;00m\n",
+      "\u001b[0;31mReadTimeoutError\u001b[0m: HTTPSConnectionPool(host='huggingface.co', port=443): Read timed out. (read timeout=10)",
+      "\nDuring handling of the above exception, another exception occurred:\n",
+      "\u001b[0;31mReadTimeout\u001b[0m                               Traceback (most recent call last)",
+      "Cell \u001b[0;32mIn[19], line 2\u001b[0m\n\u001b[1;32m      1\u001b[0m model_name_or_path \u001b[38;5;241m=\u001b[39m \u001b[38;5;124m\"\u001b[39m\u001b[38;5;124mupstage/TinySolar-248m-4k\u001b[39m\u001b[38;5;124m\"\u001b[39m\n\u001b[0;32m----> 2\u001b[0m pretrained_model \u001b[38;5;241m=\u001b[39m \u001b[43mAutoModelForCausalLM\u001b[49m\u001b[38;5;241;43m.\u001b[39;49m\u001b[43mfrom_pretrained\u001b[49m\u001b[43m(\u001b[49m\n\u001b[1;32m      3\u001b[0m \u001b[43m    \u001b[49m\u001b[43mmodel_name_or_path\u001b[49m\u001b[43m,\u001b[49m\n\u001b[1;32m      4\u001b[0m \u001b[43m    \u001b[49m\u001b[43mdevice_map\u001b[49m\u001b[38;5;241;43m=\u001b[39;49m\u001b[38;5;124;43m\"\u001b[39;49m\u001b[38;5;124;43mcpu\u001b[39;49m\u001b[38;5;124;43m\"\u001b[39;49m\u001b[43m,\u001b[49m\n\u001b[1;32m      5\u001b[0m \u001b[43m    \u001b[49m\u001b[43mtorch_dtype\u001b[49m\u001b[38;5;241;43m=\u001b[39;49m\u001b[43mtorch\u001b[49m\u001b[38;5;241;43m.\u001b[39;49m\u001b[43mbfloat16\u001b[49m\u001b[43m,\u001b[49m\u001b[43m    \u001b[49m\n\u001b[1;32m      6\u001b[0m \u001b[43m)\u001b[49m\n\u001b[1;32m      7\u001b[0m tokenizer \u001b[38;5;241m=\u001b[39m AutoTokenizer\u001b[38;5;241m.\u001b[39mfrom_pretrained(model_name_or_path)\n\u001b[1;32m      9\u001b[0m print_nparams(pretrained_model) \u001b[38;5;66;03m#  248013824 => 248M\u001b[39;00m\n",
+      "File \u001b[0;32m/usr/local/lib/python3.11/site-packages/transformers/models/auto/auto_factory.py:566\u001b[0m, in \u001b[0;36m_BaseAutoModelClass.from_pretrained\u001b[0;34m(cls, pretrained_model_name_or_path, *model_args, **kwargs)\u001b[0m\n\u001b[1;32m    564\u001b[0m \u001b[38;5;28;01melif\u001b[39;00m \u001b[38;5;28mtype\u001b[39m(config) \u001b[38;5;129;01min\u001b[39;00m \u001b[38;5;28mcls\u001b[39m\u001b[38;5;241m.\u001b[39m_model_mapping\u001b[38;5;241m.\u001b[39mkeys():\n\u001b[1;32m    565\u001b[0m     model_class \u001b[38;5;241m=\u001b[39m _get_model_class(config, \u001b[38;5;28mcls\u001b[39m\u001b[38;5;241m.\u001b[39m_model_mapping)\n\u001b[0;32m--> 566\u001b[0m     \u001b[38;5;28;01mreturn\u001b[39;00m \u001b[43mmodel_class\u001b[49m\u001b[38;5;241;43m.\u001b[39;49m\u001b[43mfrom_pretrained\u001b[49m\u001b[43m(\u001b[49m\n\u001b[1;32m    567\u001b[0m \u001b[43m        \u001b[49m\u001b[43mpretrained_model_name_or_path\u001b[49m\u001b[43m,\u001b[49m\u001b[43m \u001b[49m\u001b[38;5;241;43m*\u001b[39;49m\u001b[43mmodel_args\u001b[49m\u001b[43m,\u001b[49m\u001b[43m \u001b[49m\u001b[43mconfig\u001b[49m\u001b[38;5;241;43m=\u001b[39;49m\u001b[43mconfig\u001b[49m\u001b[43m,\u001b[49m\u001b[43m \u001b[49m\u001b[38;5;241;43m*\u001b[39;49m\u001b[38;5;241;43m*\u001b[39;49m\u001b[43mhub_kwargs\u001b[49m\u001b[43m,\u001b[49m\u001b[43m \u001b[49m\u001b[38;5;241;43m*\u001b[39;49m\u001b[38;5;241;43m*\u001b[39;49m\u001b[43mkwargs\u001b[49m\n\u001b[1;32m    568\u001b[0m \u001b[43m    \u001b[49m\u001b[43m)\u001b[49m\n\u001b[1;32m    569\u001b[0m \u001b[38;5;28;01mraise\u001b[39;00m \u001b[38;5;167;01mValueError\u001b[39;00m(\n\u001b[1;32m    570\u001b[0m     \u001b[38;5;124mf\u001b[39m\u001b[38;5;124m\"\u001b[39m\u001b[38;5;124mUnrecognized configuration class \u001b[39m\u001b[38;5;132;01m{\u001b[39;00mconfig\u001b[38;5;241m.\u001b[39m\u001b[38;5;18m__class__\u001b[39m\u001b[38;5;132;01m}\u001b[39;00m\u001b[38;5;124m for this kind of AutoModel: \u001b[39m\u001b[38;5;132;01m{\u001b[39;00m\u001b[38;5;28mcls\u001b[39m\u001b[38;5;241m.\u001b[39m\u001b[38;5;18m__name__\u001b[39m\u001b[38;5;132;01m}\u001b[39;00m\u001b[38;5;124m.\u001b[39m\u001b[38;5;130;01m\\n\u001b[39;00m\u001b[38;5;124m\"\u001b[39m\n\u001b[1;32m    571\u001b[0m     \u001b[38;5;124mf\u001b[39m\u001b[38;5;124m\"\u001b[39m\u001b[38;5;124mModel type should be one of \u001b[39m\u001b[38;5;132;01m{\u001b[39;00m\u001b[38;5;124m'\u001b[39m\u001b[38;5;124m, \u001b[39m\u001b[38;5;124m'\u001b[39m\u001b[38;5;241m.\u001b[39mjoin(c\u001b[38;5;241m.\u001b[39m\u001b[38;5;18m__name__\u001b[39m\u001b[38;5;250m \u001b[39m\u001b[38;5;28;01mfor\u001b[39;00m\u001b[38;5;250m \u001b[39mc\u001b[38;5;250m \u001b[39m\u001b[38;5;129;01min\u001b[39;00m\u001b[38;5;250m \u001b[39m\u001b[38;5;28mcls\u001b[39m\u001b[38;5;241m.\u001b[39m_model_mapping\u001b[38;5;241m.\u001b[39mkeys())\u001b[38;5;132;01m}\u001b[39;00m\u001b[38;5;124m.\u001b[39m\u001b[38;5;124m\"\u001b[39m\n\u001b[1;32m    572\u001b[0m )\n",
+      "File \u001b[0;32m/usr/local/lib/python3.11/site-packages/transformers/modeling_utils.py:3432\u001b[0m, in \u001b[0;36mPreTrainedModel.from_pretrained\u001b[0;34m(cls, pretrained_model_name_or_path, config, cache_dir, ignore_mismatched_sizes, force_download, local_files_only, token, revision, use_safetensors, *model_args, **kwargs)\u001b[0m\n\u001b[1;32m   3424\u001b[0m \u001b[38;5;28;01mif\u001b[39;00m resolved_archive_file \u001b[38;5;129;01mis\u001b[39;00m \u001b[38;5;28;01mNone\u001b[39;00m:\n\u001b[1;32m   3425\u001b[0m     \u001b[38;5;66;03m# Otherwise, maybe there is a TF or Flax model file.  We try those to give a helpful error\u001b[39;00m\n\u001b[1;32m   3426\u001b[0m     \u001b[38;5;66;03m# message.\u001b[39;00m\n\u001b[1;32m   3427\u001b[0m     has_file_kwargs \u001b[38;5;241m=\u001b[39m {\n\u001b[1;32m   3428\u001b[0m         \u001b[38;5;124m\"\u001b[39m\u001b[38;5;124mrevision\u001b[39m\u001b[38;5;124m\"\u001b[39m: revision,\n\u001b[1;32m   3429\u001b[0m         \u001b[38;5;124m\"\u001b[39m\u001b[38;5;124mproxies\u001b[39m\u001b[38;5;124m\"\u001b[39m: proxies,\n\u001b[1;32m   3430\u001b[0m         \u001b[38;5;124m\"\u001b[39m\u001b[38;5;124mtoken\u001b[39m\u001b[38;5;124m\"\u001b[39m: token,\n\u001b[1;32m   3431\u001b[0m     }\n\u001b[0;32m-> 3432\u001b[0m     \u001b[38;5;28;01mif\u001b[39;00m \u001b[43mhas_file\u001b[49m\u001b[43m(\u001b[49m\u001b[43mpretrained_model_name_or_path\u001b[49m\u001b[43m,\u001b[49m\u001b[43m \u001b[49m\u001b[43mTF2_WEIGHTS_NAME\u001b[49m\u001b[43m,\u001b[49m\u001b[43m \u001b[49m\u001b[38;5;241;43m*\u001b[39;49m\u001b[38;5;241;43m*\u001b[39;49m\u001b[43mhas_file_kwargs\u001b[49m\u001b[43m)\u001b[49m:\n\u001b[1;32m   3433\u001b[0m         \u001b[38;5;28;01mraise\u001b[39;00m \u001b[38;5;167;01mEnvironmentError\u001b[39;00m(\n\u001b[1;32m   3434\u001b[0m             \u001b[38;5;124mf\u001b[39m\u001b[38;5;124m\"\u001b[39m\u001b[38;5;132;01m{\u001b[39;00mpretrained_model_name_or_path\u001b[38;5;132;01m}\u001b[39;00m\u001b[38;5;124m does not appear to have a file named\u001b[39m\u001b[38;5;124m\"\u001b[39m\n\u001b[1;32m   3435\u001b[0m             \u001b[38;5;124mf\u001b[39m\u001b[38;5;124m\"\u001b[39m\u001b[38;5;124m \u001b[39m\u001b[38;5;132;01m{\u001b[39;00m_add_variant(WEIGHTS_NAME,\u001b[38;5;250m \u001b[39mvariant)\u001b[38;5;132;01m}\u001b[39;00m\u001b[38;5;124m but there is a file for TensorFlow weights.\u001b[39m\u001b[38;5;124m\"\u001b[39m\n\u001b[1;32m   3436\u001b[0m             \u001b[38;5;124m\"\u001b[39m\u001b[38;5;124m Use `from_tf=True` to load this model from those weights.\u001b[39m\u001b[38;5;124m\"\u001b[39m\n\u001b[1;32m   3437\u001b[0m         )\n\u001b[1;32m   3438\u001b[0m     \u001b[38;5;28;01melif\u001b[39;00m has_file(pretrained_model_name_or_path, FLAX_WEIGHTS_NAME, \u001b[38;5;241m*\u001b[39m\u001b[38;5;241m*\u001b[39mhas_file_kwargs):\n",
+      "File \u001b[0;32m/usr/local/lib/python3.11/site-packages/transformers/utils/hub.py:614\u001b[0m, in \u001b[0;36mhas_file\u001b[0;34m(path_or_repo, filename, revision, proxies, token, **deprecated_kwargs)\u001b[0m\n\u001b[1;32m    611\u001b[0m url \u001b[38;5;241m=\u001b[39m hf_hub_url(path_or_repo, filename\u001b[38;5;241m=\u001b[39mfilename, revision\u001b[38;5;241m=\u001b[39mrevision)\n\u001b[1;32m    612\u001b[0m headers \u001b[38;5;241m=\u001b[39m build_hf_headers(token\u001b[38;5;241m=\u001b[39mtoken, user_agent\u001b[38;5;241m=\u001b[39mhttp_user_agent())\n\u001b[0;32m--> 614\u001b[0m r \u001b[38;5;241m=\u001b[39m \u001b[43mrequests\u001b[49m\u001b[38;5;241;43m.\u001b[39;49m\u001b[43mhead\u001b[49m\u001b[43m(\u001b[49m\u001b[43murl\u001b[49m\u001b[43m,\u001b[49m\u001b[43m \u001b[49m\u001b[43mheaders\u001b[49m\u001b[38;5;241;43m=\u001b[39;49m\u001b[43mheaders\u001b[49m\u001b[43m,\u001b[49m\u001b[43m \u001b[49m\u001b[43mallow_redirects\u001b[49m\u001b[38;5;241;43m=\u001b[39;49m\u001b[38;5;28;43;01mFalse\u001b[39;49;00m\u001b[43m,\u001b[49m\u001b[43m \u001b[49m\u001b[43mproxies\u001b[49m\u001b[38;5;241;43m=\u001b[39;49m\u001b[43mproxies\u001b[49m\u001b[43m,\u001b[49m\u001b[43m \u001b[49m\u001b[43mtimeout\u001b[49m\u001b[38;5;241;43m=\u001b[39;49m\u001b[38;5;241;43m10\u001b[39;49m\u001b[43m)\u001b[49m\n\u001b[1;32m    615\u001b[0m \u001b[38;5;28;01mtry\u001b[39;00m:\n\u001b[1;32m    616\u001b[0m     hf_raise_for_status(r)\n",
+      "File \u001b[0;32m/usr/local/lib/python3.11/site-packages/requests/api.py:100\u001b[0m, in \u001b[0;36mhead\u001b[0;34m(url, **kwargs)\u001b[0m\n\u001b[1;32m     89\u001b[0m \u001b[38;5;250m\u001b[39m\u001b[38;5;124mr\u001b[39m\u001b[38;5;124;03m\"\"\"Sends a HEAD request.\u001b[39;00m\n\u001b[1;32m     90\u001b[0m \n\u001b[1;32m     91\u001b[0m \u001b[38;5;124;03m:param url: URL for the new :class:`Request` object.\u001b[39;00m\n\u001b[0;32m   (...)\u001b[0m\n\u001b[1;32m     96\u001b[0m \u001b[38;5;124;03m:rtype: requests.Response\u001b[39;00m\n\u001b[1;32m     97\u001b[0m \u001b[38;5;124;03m\"\"\"\u001b[39;00m\n\u001b[1;32m     99\u001b[0m kwargs\u001b[38;5;241m.\u001b[39msetdefault(\u001b[38;5;124m\"\u001b[39m\u001b[38;5;124mallow_redirects\u001b[39m\u001b[38;5;124m\"\u001b[39m, \u001b[38;5;28;01mFalse\u001b[39;00m)\n\u001b[0;32m--> 100\u001b[0m \u001b[38;5;28;01mreturn\u001b[39;00m \u001b[43mrequest\u001b[49m\u001b[43m(\u001b[49m\u001b[38;5;124;43m\"\u001b[39;49m\u001b[38;5;124;43mhead\u001b[39;49m\u001b[38;5;124;43m\"\u001b[39;49m\u001b[43m,\u001b[49m\u001b[43m \u001b[49m\u001b[43murl\u001b[49m\u001b[43m,\u001b[49m\u001b[43m \u001b[49m\u001b[38;5;241;43m*\u001b[39;49m\u001b[38;5;241;43m*\u001b[39;49m\u001b[43mkwargs\u001b[49m\u001b[43m)\u001b[49m\n",
+      "File \u001b[0;32m/usr/local/lib/python3.11/site-packages/requests/api.py:59\u001b[0m, in \u001b[0;36mrequest\u001b[0;34m(method, url, **kwargs)\u001b[0m\n\u001b[1;32m     55\u001b[0m \u001b[38;5;66;03m# By using the 'with' statement we are sure the session is closed, thus we\u001b[39;00m\n\u001b[1;32m     56\u001b[0m \u001b[38;5;66;03m# avoid leaving sockets open which can trigger a ResourceWarning in some\u001b[39;00m\n\u001b[1;32m     57\u001b[0m \u001b[38;5;66;03m# cases, and look like a memory leak in others.\u001b[39;00m\n\u001b[1;32m     58\u001b[0m \u001b[38;5;28;01mwith\u001b[39;00m sessions\u001b[38;5;241m.\u001b[39mSession() \u001b[38;5;28;01mas\u001b[39;00m session:\n\u001b[0;32m---> 59\u001b[0m     \u001b[38;5;28;01mreturn\u001b[39;00m \u001b[43msession\u001b[49m\u001b[38;5;241;43m.\u001b[39;49m\u001b[43mrequest\u001b[49m\u001b[43m(\u001b[49m\u001b[43mmethod\u001b[49m\u001b[38;5;241;43m=\u001b[39;49m\u001b[43mmethod\u001b[49m\u001b[43m,\u001b[49m\u001b[43m \u001b[49m\u001b[43murl\u001b[49m\u001b[38;5;241;43m=\u001b[39;49m\u001b[43murl\u001b[49m\u001b[43m,\u001b[49m\u001b[43m \u001b[49m\u001b[38;5;241;43m*\u001b[39;49m\u001b[38;5;241;43m*\u001b[39;49m\u001b[43mkwargs\u001b[49m\u001b[43m)\u001b[49m\n",
+      "File \u001b[0;32m/usr/local/lib/python3.11/site-packages/requests/sessions.py:589\u001b[0m, in \u001b[0;36mSession.request\u001b[0;34m(self, method, url, params, data, headers, cookies, files, auth, timeout, allow_redirects, proxies, hooks, stream, verify, cert, json)\u001b[0m\n\u001b[1;32m    584\u001b[0m send_kwargs \u001b[38;5;241m=\u001b[39m {\n\u001b[1;32m    585\u001b[0m     \u001b[38;5;124m\"\u001b[39m\u001b[38;5;124mtimeout\u001b[39m\u001b[38;5;124m\"\u001b[39m: timeout,\n\u001b[1;32m    586\u001b[0m     \u001b[38;5;124m\"\u001b[39m\u001b[38;5;124mallow_redirects\u001b[39m\u001b[38;5;124m\"\u001b[39m: allow_redirects,\n\u001b[1;32m    587\u001b[0m }\n\u001b[1;32m    588\u001b[0m send_kwargs\u001b[38;5;241m.\u001b[39mupdate(settings)\n\u001b[0;32m--> 589\u001b[0m resp \u001b[38;5;241m=\u001b[39m \u001b[38;5;28;43mself\u001b[39;49m\u001b[38;5;241;43m.\u001b[39;49m\u001b[43msend\u001b[49m\u001b[43m(\u001b[49m\u001b[43mprep\u001b[49m\u001b[43m,\u001b[49m\u001b[43m \u001b[49m\u001b[38;5;241;43m*\u001b[39;49m\u001b[38;5;241;43m*\u001b[39;49m\u001b[43msend_kwargs\u001b[49m\u001b[43m)\u001b[49m\n\u001b[1;32m    591\u001b[0m \u001b[38;5;28;01mreturn\u001b[39;00m resp\n",
+      "File \u001b[0;32m/usr/local/lib/python3.11/site-packages/requests/sessions.py:703\u001b[0m, in \u001b[0;36mSession.send\u001b[0;34m(self, request, **kwargs)\u001b[0m\n\u001b[1;32m    700\u001b[0m start \u001b[38;5;241m=\u001b[39m preferred_clock()\n\u001b[1;32m    702\u001b[0m \u001b[38;5;66;03m# Send the request\u001b[39;00m\n\u001b[0;32m--> 703\u001b[0m r \u001b[38;5;241m=\u001b[39m \u001b[43madapter\u001b[49m\u001b[38;5;241;43m.\u001b[39;49m\u001b[43msend\u001b[49m\u001b[43m(\u001b[49m\u001b[43mrequest\u001b[49m\u001b[43m,\u001b[49m\u001b[43m \u001b[49m\u001b[38;5;241;43m*\u001b[39;49m\u001b[38;5;241;43m*\u001b[39;49m\u001b[43mkwargs\u001b[49m\u001b[43m)\u001b[49m\n\u001b[1;32m    705\u001b[0m \u001b[38;5;66;03m# Total elapsed time of the request (approximately)\u001b[39;00m\n\u001b[1;32m    706\u001b[0m elapsed \u001b[38;5;241m=\u001b[39m preferred_clock() \u001b[38;5;241m-\u001b[39m start\n",
+      "File \u001b[0;32m/usr/local/lib/python3.11/site-packages/requests/adapters.py:635\u001b[0m, in \u001b[0;36mHTTPAdapter.send\u001b[0;34m(self, request, stream, timeout, verify, cert, proxies)\u001b[0m\n\u001b[1;32m    633\u001b[0m     \u001b[38;5;28;01mraise\u001b[39;00m SSLError(e, request\u001b[38;5;241m=\u001b[39mrequest)\n\u001b[1;32m    634\u001b[0m \u001b[38;5;28;01melif\u001b[39;00m \u001b[38;5;28misinstance\u001b[39m(e, ReadTimeoutError):\n\u001b[0;32m--> 635\u001b[0m     \u001b[38;5;28;01mraise\u001b[39;00m ReadTimeout(e, request\u001b[38;5;241m=\u001b[39mrequest)\n\u001b[1;32m    636\u001b[0m \u001b[38;5;28;01melif\u001b[39;00m \u001b[38;5;28misinstance\u001b[39m(e, _InvalidHeader):\n\u001b[1;32m    637\u001b[0m     \u001b[38;5;28;01mraise\u001b[39;00m InvalidHeader(e, request\u001b[38;5;241m=\u001b[39mrequest)\n",
+      "\u001b[0;31mReadTimeout\u001b[0m: HTTPSConnectionPool(host='huggingface.co', port=443): Read timed out. (read timeout=10)"
+     ]
+    }
+   ],
+   "source": [
+    "model_name_or_path = \"upstage/TinySolar-248m-4k\"\n",
+    "pretrained_model = AutoModelForCausalLM.from_pretrained(\n",
+    "    model_name_or_path,\n",
+    "    device_map=\"cpu\",\n",
+    "    torch_dtype=torch.bfloat16,    \n",
+    ")\n",
+    "tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)\n",
+    "\n",
+    "print_nparams(pretrained_model) #  248013824 => 248M"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 24,
+   "id": "acaaefbf-d73a-4ed0-bac6-b92575012952",
+   "metadata": {
+    "height": 183
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "LlamaConfig {\n",
+      "  \"_name_or_path\": \"./models/upstage/TinySolar-248m-4k\",\n",
+      "  \"architectures\": [\n",
+      "    \"LlamaForCausalLM\"\n",
+      "  ],\n",
+      "  \"attention_bias\": false,\n",
+      "  \"attention_dropout\": 0.0,\n",
+      "  \"bos_token_id\": 1,\n",
+      "  \"eos_token_id\": 2,\n",
+      "  \"hidden_act\": \"silu\",\n",
+      "  \"hidden_size\": 1024,\n",
+      "  \"initializer_range\": 0.02,\n",
+      "  \"intermediate_size\": 4096,\n",
+      "  \"max_position_embeddings\": 32768,\n",
+      "  \"model_type\": \"llama\",\n",
+      "  \"num_attention_heads\": 32,\n",
+      "  \"num_hidden_layers\": 12,\n",
+      "  \"num_key_value_heads\": 8,\n",
+      "  \"pretraining_tp\": 1,\n",
+      "  \"rms_norm_eps\": 1e-06,\n",
+      "  \"rope_scaling\": null,\n",
+      "  \"rope_theta\": 10000.0,\n",
+      "  \"tie_word_embeddings\": false,\n",
+      "  \"torch_dtype\": \"bfloat16\",\n",
+      "  \"transformers_version\": \"4.37.2\",\n",
+      "  \"use_cache\": true,\n",
+      "  \"vocab_size\": 32000\n",
+      "}\n",
+      "\n"
+     ]
+    }
+   ],
+   "source": [
+    "from copy import deepcopy\n",
+    "\n",
+    "model.model.layers = deepcopy(model.model.layers[:-4]) \\\n",
+    "    + deepcopy(model.model.layers[4:])\n",
+    "\n",
+    "model.model.embed_tokens = deepcopy(model.model.embed_tokens)\n",
+    "\n",
+    "model.lm_head = deepcopy(model.lm_head)\n",
+    "\n",
+    "print(model.config)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "aebdfdb4",
+   "metadata": {},
+   "source": [
+    "Check the number of parameters is still 308 million:"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 25,
+   "id": "54dffe64-8451-4146-9c5d-cdfd43e43230",
+   "metadata": {
+    "height": 30
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "The total number of parameters is: 430490624\n"
+     ]
+    }
+   ],
+   "source": [
+    "print_nparams(model)  # 308839424 => 308M"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "0df68e10",
+   "metadata": {},
+   "source": [
+    "Try using the model for inference:"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 26,
+   "id": "f8a8a453-96cd-4f6c-91c5-5e529b2e41ce",
+   "metadata": {
+    "height": 319
+   },
+   "outputs": [
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "Setting `pad_token_id` to `eos_token_id`:2 for open-end generation.\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "to work on the other side of the field.\n",
+      "I've been very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very not, I think, at the time of this that I was in the same position, I think, at the time that I was able and\n",
+      "a.�]revece that the same-\n",
+      "certainty.\n",
+      "\n",
+      "A.\n"
+     ]
+    }
+   ],
+   "source": [
+    "# Run simple inference to show no trained model\n",
+    "prompt = \"I am an engineer. I love\"\n",
+    "\n",
+    "inputs = tokenizer(prompt, return_tensors=\"pt\").to(model.device)\n",
+    "\n",
+    "streamer = TextStreamer(\n",
+    "    tokenizer, \n",
+    "    skip_prompt=True, \n",
+    "    skip_special_tokens=True\n",
+    ")\n",
+    "\n",
+    "outputs = model.generate(\n",
+    "    **inputs, \n",
+    "    streamer=streamer, \n",
+    "    use_cache=True, \n",
+    "    max_new_tokens=128, \n",
+    "    do_sample=False\n",
+    ")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "f1814e0d",
+   "metadata": {},
+   "source": [
+    "### Save the model to disk\n",
+    "\n",
+    "Note the new model name here which reflects the 308 million parameters of the new, upscaled model. "
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 27,
+   "id": "31215375-a0bd-4f9d-8ea2-1385c315c25b",
+   "metadata": {
+    "height": 30
+   },
+   "outputs": [],
+   "source": [
+    "model.save_pretrained('./data/TinySolar-308m-4k-init')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "41eb424e-58cc-4443-869f-fc870931741b",
+   "metadata": {
+    "height": 30
+   },
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "ea1a3eed-ef47-4d8e-a66b-b948eef59c2e",
+   "metadata": {
+    "height": 30
+   },
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "3018f3b5-f537-4a41-b50b-e558b34907b1",
+   "metadata": {
+    "height": 30
+   },
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "2ac6e160-e2a1-409d-abaa-7c4cf9f00348",
+   "metadata": {
+    "height": 30
+   },
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "681bfcb8-62c2-4254-bc08-211f09682c6c",
+   "metadata": {
+    "height": 30
+   },
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "5fd09352-9916-45d7-ab78-0d6a65c92ee5",
+   "metadata": {
+    "height": 30
+   },
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "b2818d5a-3fc7-431b-9220-7ffb1f2ea07d",
+   "metadata": {
+    "height": 30
+   },
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "89919278-f2d7-4c67-8a47-ca92140330a4",
+   "metadata": {
+    "height": 30
+   },
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "452c56f6-00fc-4637-8c9d-c824a11c192b",
+   "metadata": {
+    "height": 30
+   },
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "655b4c7e-eee5-462f-85a4-5d3b80618987",
+   "metadata": {
+    "height": 30
+   },
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "8c0d9ad8-69ad-4c70-aff2-c21389e268ad",
+   "metadata": {
+    "height": 30
+   },
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "2e268442-fac6-4852-ad4c-7829bff9a626",
+   "metadata": {
+    "height": 30
+   },
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "2c487c2a-fed5-493b-85f5-58c6354cf14c",
+   "metadata": {
+    "height": 30
+   },
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "6f7d9177-0ed2-4f1f-955c-34d202b3e8e4",
+   "metadata": {
+    "height": 30
+   },
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "d6514487-8b10-4463-9ab8-2294bce43ad4",
+   "metadata": {
+    "height": 30
+   },
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "b13c1198-5915-499e-b2d2-694ac73bcde5",
+   "metadata": {
+    "height": 30
+   },
+   "outputs": [],
+   "source": []
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3 (ipykernel)",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.11.9"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 5
+}
